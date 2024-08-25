@@ -3,7 +3,7 @@ module example
 go 1.22.5
 
 require (
-	github.com/MrSametBurgazoglu/enterprise v1.0.0
+	github.com/MrSametBurgazoglu/enterprise v0.1.0-alpha
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.6.0
 )
@@ -27,5 +27,3 @@ require (
 	golang.org/x/text v0.16.0 // indirect
 	golang.org/x/tools v0.23.0 // indirect
 )
-
-replace github.com/MrSametBurgazoglu/enterprise => /home/machine/enterprise
