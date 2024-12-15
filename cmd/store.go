@@ -70,7 +70,7 @@ func main() {
 		denemeList.WithAccountList()
 	})
 
-	err, _ = t.Get()
+	err = t.Get()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -156,16 +156,11 @@ func main() {
 	testList.WithDenemeList(func(denemeList *models.DenemeList) {
 		denemeList.WithAccountList()
 	})
-	err, found := testList.List()
-	if err == nil && found {
+	err = testList.List()
+	if err == nil {
 		for i, test := range testList.Items {
 			println(i, test.GetID().String())
-			for i2, deneme := range test.DenemeList.Items {
-				println(i2, deneme.GetID().String())
-				for i3, account := range deneme.AccountList.Items {
-					println(i3, account.GetID().String())
-				}
-			}
+			p
 			//println(item.Deneme.GetCount())
 		}
 	} else {
@@ -198,8 +193,8 @@ func main() {
 	acc4 := models.NewAccount(ctx, db)
 	acc4.Where(acc4.IsIDEqual(acc3.GetID()))
 	acc4.WithGroupList()
-	err, ok := acc4.Get()
-	if err == nil && ok {
+	err = acc4.Get()
+	if err == nil {
 		println(acc4.GroupList.Items[0].GetID().String())
 	}
 

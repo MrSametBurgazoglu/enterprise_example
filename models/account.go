@@ -16,6 +16,22 @@ const (
 	AccountDenemeIDField string = "deneme_id"
 )
 
+var databaseAccountOperationHook = func(operationInfo *client.OperationInfo, model *Account, operationFunc func() error) error {
+	return operationFunc()
+}
+
+var databaseAccountListOperationHook = func(operationInfo *client.OperationInfo, model *AccountList, operationFunc func() error) error {
+	return operationFunc()
+}
+
+func SetDatabaseAccountOperationHook(f func(operationInfo *client.OperationInfo, model *Account, operationFunc func() error) error) {
+	databaseAccountOperationHook = f
+}
+
+func SetDatabaseAccountListOperationHook(f func(operationInfo *client.OperationInfo, model *AccountList, operationFunc func() error) error) {
+	databaseAccountListOperationHook = f
+}
+
 func NewAccount(ctx context.Context, dc client.DatabaseClient) *Account {
 	v := &Account{client: client.NewClient(dc), ctx: ctx}
 	v.relations = new(client.RelationList)
@@ -44,8 +60,9 @@ type Account struct {
 
 	denemeid *uuid.UUID
 
-	changedFields map[string]any
-	serialFields  []*client.SelectedField
+	changedFields     map[string]any
+	changedFieldsList []string
+	serialFields      []*client.SelectedField
 
 	ctx    context.Context
 	client *client.Client
@@ -273,16 +290,32 @@ func (t *Account) GetDenemeID() *uuid.UUID {
 }
 
 func (t *Account) SetIDField() {
-	t.changedFields[AccountIDField] = t.id
+	if _, exist := t.changedFields[AccountIDField]; !exist {
+		t.changedFields[AccountIDField] = t.id
+		t.changedFieldsList = append(t.changedFieldsList, AccountIDField)
+	}
+
 }
 func (t *Account) SetNameField() {
-	t.changedFields[AccountNameField] = t.name
+	if _, exist := t.changedFields[AccountNameField]; !exist {
+		t.changedFields[AccountNameField] = t.name
+		t.changedFieldsList = append(t.changedFieldsList, AccountNameField)
+	}
+
 }
 func (t *Account) SetSurnameField() {
-	t.changedFields[AccountSurnameField] = t.surname
+	if _, exist := t.changedFields[AccountSurnameField]; !exist {
+		t.changedFields[AccountSurnameField] = t.surname
+		t.changedFieldsList = append(t.changedFieldsList, AccountSurnameField)
+	}
+
 }
 func (t *Account) SetDenemeIDField() {
-	t.changedFields[AccountDenemeIDField] = t.denemeid
+	if _, exist := t.changedFields[AccountDenemeIDField]; !exist {
+		t.changedFields[AccountDenemeIDField] = t.denemeid
+		t.changedFieldsList = append(t.changedFieldsList, AccountDenemeIDField)
+	}
+
 }
 
 func (t *Account) WithDeneme(opts ...func(*Deneme)) {
@@ -344,7 +377,6 @@ func (t *Account) WithGroupList(opts ...func(*GroupList)) {
 }
 
 func (t *AccountList) WithDeneme(opts ...func(*Deneme)) {
-	//t.Deneme = NewRelationDeneme(t.ctx, t.client.Database)
 	v := NewRelationDeneme(t.ctx, t.client.Database)
 	for _, opt := range opts {
 		opt(v)
@@ -383,7 +415,6 @@ func (t *AccountList) cleanDeneme() {
 	Relation.Relations = append(Relation.Relations[:p], Relation.Relations[p+1:]...)
 }
 func (t *AccountList) WithGroupList(opts ...func(*GroupList)) {
-	//t.GroupList = NewRelationGroupList(t.ctx, t.client.Database)
 	v := NewRelationGroupList(t.ctx, t.client.Database)
 	for _, opt := range opts {
 		opt(v)
@@ -425,6 +456,7 @@ func (t *AccountList) cleanGroupList() {
 func (t *Account) Default() {
 	t.id = uuid.New()
 	t.changedFields[AccountIDField] = t.id
+	t.changedFieldsList = append(t.changedFieldsList, AccountIDField)
 
 }
 
@@ -494,28 +526,86 @@ func (t *AccountList) ScanResult() {
 	v.ScanResult()
 }
 
-func (t *Account) Get() (error, bool) {
-	return t.client.Get(t.ctx, t.where, t, &t.result)
+func (t *Account) GetContext() context.Context {
+	return t.ctx
+}
+
+func (t *Account) Get() error {
+	return databaseAccountOperationHook(
+		client.NewOperationInfo(
+			AccountTableName,
+			client.OperationTypeGet,
+		),
+		t,
+		func() error {
+			return t.client.Get(t.ctx, t.where, t, &t.result)
+		},
+	)
 }
 
 func (t *Account) Refresh() error {
-	return t.client.Refresh(t.ctx, t, &t.result, AccountIDField, t.id)
+	return databaseAccountOperationHook(
+		client.NewOperationInfo(
+			AccountTableName,
+			client.OperationTypeRefresh,
+		),
+		t,
+		func() error {
+			return t.client.Refresh(t.ctx, t, &t.result, AccountIDField, t.id)
+		},
+	)
 }
 
 func (t *Account) Create() error {
-	return t.client.Create(t.ctx, AccountTableName, t.changedFields, t.serialFields)
+	return databaseAccountOperationHook(
+		client.NewOperationInfo(
+			AccountTableName,
+			client.OperationTypeCreate,
+		),
+		t,
+		func() error {
+			return t.client.Create(t.ctx, AccountTableName, t.changedFields, t.changedFieldsList, t.serialFields)
+		},
+	)
 }
 
 func (t *Account) Update() error {
-	return t.client.Update(t.ctx, AccountTableName, t.changedFields, AccountIDField, t.id)
+	return databaseAccountOperationHook(
+		client.NewOperationInfo(
+			AccountTableName,
+			client.OperationTypeUpdate,
+		),
+		t,
+		func() error {
+			return t.client.Update(t.ctx, AccountTableName, t.changedFields, t.changedFieldsList, AccountIDField, t.id)
+		},
+	)
 }
 
 func (t *Account) Delete() error {
-	return t.client.Delete(t.ctx, AccountTableName, AccountIDField, t.id)
+	return databaseAccountOperationHook(
+		client.NewOperationInfo(
+			AccountTableName,
+			client.OperationTypeDelete,
+		),
+		t,
+		func() error {
+			return t.client.Delete(t.ctx, AccountTableName, AccountIDField, t.id)
+		},
+	)
 }
 
-func (t *AccountList) List() (error, bool) {
-	return t.client.List(t.ctx, t.where, t, &t.result, t.order, t.paging)
+func (t *AccountList) List() error {
+	return databaseAccountListOperationHook(
+		client.NewOperationInfo(
+			AccountTableName,
+			client.OperationTypeList,
+		),
+		t,
+		func() error {
+			return t.client.List(t.ctx, t.where, t, &t.result, t.order, t.paging)
+		},
+	)
 }
 
 func (t *AccountList) Aggregate(f func(aggregate *client.Aggregate)) (func() error, error) {
@@ -570,7 +660,7 @@ func (t *AccountResult) GetRelations() []client.Result {
 }
 
 func (t *AccountResult) prepare() {
-	t.denemeid = &uuid.Nil
+	t.denemeid = &uuid.UUID{}
 
 }
 

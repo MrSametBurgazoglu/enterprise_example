@@ -17,6 +17,22 @@ const (
 	DenemeDenemeTypeField string = "deneme_type"
 )
 
+var databaseDenemeOperationHook = func(operationInfo *client.OperationInfo, model *Deneme, operationFunc func() error) error {
+	return operationFunc()
+}
+
+var databaseDenemeListOperationHook = func(operationInfo *client.OperationInfo, model *DenemeList, operationFunc func() error) error {
+	return operationFunc()
+}
+
+func SetDatabaseDenemeOperationHook(f func(operationInfo *client.OperationInfo, model *Deneme, operationFunc func() error) error) {
+	databaseDenemeOperationHook = f
+}
+
+func SetDatabaseDenemeListOperationHook(f func(operationInfo *client.OperationInfo, model *DenemeList, operationFunc func() error) error) {
+	databaseDenemeListOperationHook = f
+}
+
 type DenemeType string
 
 const (
@@ -54,8 +70,9 @@ type Deneme struct {
 
 	denemetype DenemeType
 
-	changedFields map[string]any
-	serialFields  []*client.SelectedField
+	changedFields     map[string]any
+	changedFieldsList []string
+	serialFields      []*client.SelectedField
 
 	ctx    context.Context
 	client *client.Client
@@ -315,19 +332,39 @@ func (t *Deneme) GetDenemeType() DenemeType {
 }
 
 func (t *Deneme) SetIDField() {
-	t.changedFields[DenemeIDField] = t.id
+	if _, exist := t.changedFields[DenemeIDField]; !exist {
+		t.changedFields[DenemeIDField] = t.id
+		t.changedFieldsList = append(t.changedFieldsList, DenemeIDField)
+	}
+
 }
 func (t *Deneme) SetTestIDField() {
-	t.changedFields[DenemeTestIDField] = t.testid
+	if _, exist := t.changedFields[DenemeTestIDField]; !exist {
+		t.changedFields[DenemeTestIDField] = t.testid
+		t.changedFieldsList = append(t.changedFieldsList, DenemeTestIDField)
+	}
+
 }
 func (t *Deneme) SetCountField() {
-	t.changedFields[DenemeCountField] = t.count
+	if _, exist := t.changedFields[DenemeCountField]; !exist {
+		t.changedFields[DenemeCountField] = t.count
+		t.changedFieldsList = append(t.changedFieldsList, DenemeCountField)
+	}
+
 }
 func (t *Deneme) SetIsActiveField() {
-	t.changedFields[DenemeIsActiveField] = t.isactive
+	if _, exist := t.changedFields[DenemeIsActiveField]; !exist {
+		t.changedFields[DenemeIsActiveField] = t.isactive
+		t.changedFieldsList = append(t.changedFieldsList, DenemeIsActiveField)
+	}
+
 }
 func (t *Deneme) SetDenemeTypeField() {
-	t.changedFields[DenemeDenemeTypeField] = t.denemetype
+	if _, exist := t.changedFields[DenemeDenemeTypeField]; !exist {
+		t.changedFields[DenemeDenemeTypeField] = t.denemetype
+		t.changedFieldsList = append(t.changedFieldsList, DenemeDenemeTypeField)
+	}
+
 }
 
 func (t *Deneme) WithTest(opts ...func(*Test)) {
@@ -388,7 +425,6 @@ func (t *Deneme) WithAccountList(opts ...func(*AccountList)) {
 }
 
 func (t *DenemeList) WithTest(opts ...func(*Test)) {
-	//t.Test = NewRelationTest(t.ctx, t.client.Database)
 	v := NewRelationTest(t.ctx, t.client.Database)
 	for _, opt := range opts {
 		opt(v)
@@ -427,7 +463,6 @@ func (t *DenemeList) cleanTest() {
 	Relation.Relations = append(Relation.Relations[:p], Relation.Relations[p+1:]...)
 }
 func (t *DenemeList) WithAccountList(opts ...func(*AccountList)) {
-	//t.AccountList = NewRelationAccountList(t.ctx, t.client.Database)
 	v := NewRelationAccountList(t.ctx, t.client.Database)
 	for _, opt := range opts {
 		opt(v)
@@ -469,9 +504,11 @@ func (t *DenemeList) cleanAccountList() {
 func (t *Deneme) Default() {
 	t.id = uuid.New()
 	t.changedFields[DenemeIDField] = t.id
+	t.changedFieldsList = append(t.changedFieldsList, DenemeIDField)
 
 	t.isactive = true
 	t.changedFields[DenemeIsActiveField] = t.isactive
+	t.changedFieldsList = append(t.changedFieldsList, DenemeIsActiveField)
 
 }
 
@@ -542,28 +579,86 @@ func (t *DenemeList) ScanResult() {
 	v.ScanResult()
 }
 
-func (t *Deneme) Get() (error, bool) {
-	return t.client.Get(t.ctx, t.where, t, &t.result)
+func (t *Deneme) GetContext() context.Context {
+	return t.ctx
+}
+
+func (t *Deneme) Get() error {
+	return databaseDenemeOperationHook(
+		client.NewOperationInfo(
+			DenemeTableName,
+			client.OperationTypeGet,
+		),
+		t,
+		func() error {
+			return t.client.Get(t.ctx, t.where, t, &t.result)
+		},
+	)
 }
 
 func (t *Deneme) Refresh() error {
-	return t.client.Refresh(t.ctx, t, &t.result, DenemeIDField, t.id)
+	return databaseDenemeOperationHook(
+		client.NewOperationInfo(
+			DenemeTableName,
+			client.OperationTypeRefresh,
+		),
+		t,
+		func() error {
+			return t.client.Refresh(t.ctx, t, &t.result, DenemeIDField, t.id)
+		},
+	)
 }
 
 func (t *Deneme) Create() error {
-	return t.client.Create(t.ctx, DenemeTableName, t.changedFields, t.serialFields)
+	return databaseDenemeOperationHook(
+		client.NewOperationInfo(
+			DenemeTableName,
+			client.OperationTypeCreate,
+		),
+		t,
+		func() error {
+			return t.client.Create(t.ctx, DenemeTableName, t.changedFields, t.changedFieldsList, t.serialFields)
+		},
+	)
 }
 
 func (t *Deneme) Update() error {
-	return t.client.Update(t.ctx, DenemeTableName, t.changedFields, DenemeIDField, t.id)
+	return databaseDenemeOperationHook(
+		client.NewOperationInfo(
+			DenemeTableName,
+			client.OperationTypeUpdate,
+		),
+		t,
+		func() error {
+			return t.client.Update(t.ctx, DenemeTableName, t.changedFields, t.changedFieldsList, DenemeIDField, t.id)
+		},
+	)
 }
 
 func (t *Deneme) Delete() error {
-	return t.client.Delete(t.ctx, DenemeTableName, DenemeIDField, t.id)
+	return databaseDenemeOperationHook(
+		client.NewOperationInfo(
+			DenemeTableName,
+			client.OperationTypeDelete,
+		),
+		t,
+		func() error {
+			return t.client.Delete(t.ctx, DenemeTableName, DenemeIDField, t.id)
+		},
+	)
 }
 
-func (t *DenemeList) List() (error, bool) {
-	return t.client.List(t.ctx, t.where, t, &t.result, t.order, t.paging)
+func (t *DenemeList) List() error {
+	return databaseDenemeListOperationHook(
+		client.NewOperationInfo(
+			DenemeTableName,
+			client.OperationTypeList,
+		),
+		t,
+		func() error {
+			return t.client.List(t.ctx, t.where, t, &t.result, t.order, t.paging)
+		},
+	)
 }
 
 func (t *DenemeList) Aggregate(f func(aggregate *client.Aggregate)) (func() error, error) {
@@ -619,7 +714,7 @@ func (t *DenemeResult) GetRelations() []client.Result {
 }
 
 func (t *DenemeResult) prepare() {
-	t.testid = &uuid.Nil
+	t.testid = &uuid.UUID{}
 
 }
 

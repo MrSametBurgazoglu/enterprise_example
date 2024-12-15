@@ -16,6 +16,22 @@ const (
 	TestCreatedAtField string = "created_at"
 )
 
+var databaseTestOperationHook = func(operationInfo *client.OperationInfo, model *Test, operationFunc func() error) error {
+	return operationFunc()
+}
+
+var databaseTestListOperationHook = func(operationInfo *client.OperationInfo, model *TestList, operationFunc func() error) error {
+	return operationFunc()
+}
+
+func SetDatabaseTestOperationHook(f func(operationInfo *client.OperationInfo, model *Test, operationFunc func() error) error) {
+	databaseTestOperationHook = f
+}
+
+func SetDatabaseTestListOperationHook(f func(operationInfo *client.OperationInfo, model *TestList, operationFunc func() error) error) {
+	databaseTestListOperationHook = f
+}
+
 func NewTest(ctx context.Context, dc client.DatabaseClient) *Test {
 	v := &Test{client: client.NewClient(dc), ctx: ctx}
 	v.relations = new(client.RelationList)
@@ -42,8 +58,9 @@ type Test struct {
 
 	createdat time.Time
 
-	changedFields map[string]any
-	serialFields  []*client.SelectedField
+	changedFields     map[string]any
+	changedFieldsList []string
+	serialFields      []*client.SelectedField
 
 	ctx    context.Context
 	client *client.Client
@@ -239,13 +256,25 @@ func (t *Test) GetCreatedAt() time.Time {
 }
 
 func (t *Test) SetIDField() {
-	t.changedFields[TestIDField] = t.id
+	if _, exist := t.changedFields[TestIDField]; !exist {
+		t.changedFields[TestIDField] = t.id
+		t.changedFieldsList = append(t.changedFieldsList, TestIDField)
+	}
+
 }
 func (t *Test) SetNameField() {
-	t.changedFields[TestNameField] = t.name
+	if _, exist := t.changedFields[TestNameField]; !exist {
+		t.changedFields[TestNameField] = t.name
+		t.changedFieldsList = append(t.changedFieldsList, TestNameField)
+	}
+
 }
 func (t *Test) SetCreatedAtField() {
-	t.changedFields[TestCreatedAtField] = t.createdat
+	if _, exist := t.changedFields[TestCreatedAtField]; !exist {
+		t.changedFields[TestCreatedAtField] = t.createdat
+		t.changedFieldsList = append(t.changedFieldsList, TestCreatedAtField)
+	}
+
 }
 
 func (t *Test) WithDenemeList(opts ...func(*DenemeList)) {
@@ -278,7 +307,6 @@ func (t *Test) WithDenemeList(opts ...func(*DenemeList)) {
 }
 
 func (t *TestList) WithDenemeList(opts ...func(*DenemeList)) {
-	//t.DenemeList = NewRelationDenemeList(t.ctx, t.client.Database)
 	v := NewRelationDenemeList(t.ctx, t.client.Database)
 	for _, opt := range opts {
 		opt(v)
@@ -320,6 +348,7 @@ func (t *TestList) cleanDenemeList() {
 func (t *Test) Default() {
 	t.id = uuid.New()
 	t.changedFields[TestIDField] = t.id
+	t.changedFieldsList = append(t.changedFieldsList, TestIDField)
 
 }
 
@@ -380,28 +409,86 @@ func (t *TestList) ScanResult() {
 	v.ScanResult()
 }
 
-func (t *Test) Get() (error, bool) {
-	return t.client.Get(t.ctx, t.where, t, &t.result)
+func (t *Test) GetContext() context.Context {
+	return t.ctx
+}
+
+func (t *Test) Get() error {
+	return databaseTestOperationHook(
+		client.NewOperationInfo(
+			TestTableName,
+			client.OperationTypeGet,
+		),
+		t,
+		func() error {
+			return t.client.Get(t.ctx, t.where, t, &t.result)
+		},
+	)
 }
 
 func (t *Test) Refresh() error {
-	return t.client.Refresh(t.ctx, t, &t.result, TestIDField, t.id)
+	return databaseTestOperationHook(
+		client.NewOperationInfo(
+			TestTableName,
+			client.OperationTypeRefresh,
+		),
+		t,
+		func() error {
+			return t.client.Refresh(t.ctx, t, &t.result, TestIDField, t.id)
+		},
+	)
 }
 
 func (t *Test) Create() error {
-	return t.client.Create(t.ctx, TestTableName, t.changedFields, t.serialFields)
+	return databaseTestOperationHook(
+		client.NewOperationInfo(
+			TestTableName,
+			client.OperationTypeCreate,
+		),
+		t,
+		func() error {
+			return t.client.Create(t.ctx, TestTableName, t.changedFields, t.changedFieldsList, t.serialFields)
+		},
+	)
 }
 
 func (t *Test) Update() error {
-	return t.client.Update(t.ctx, TestTableName, t.changedFields, TestIDField, t.id)
+	return databaseTestOperationHook(
+		client.NewOperationInfo(
+			TestTableName,
+			client.OperationTypeUpdate,
+		),
+		t,
+		func() error {
+			return t.client.Update(t.ctx, TestTableName, t.changedFields, t.changedFieldsList, TestIDField, t.id)
+		},
+	)
 }
 
 func (t *Test) Delete() error {
-	return t.client.Delete(t.ctx, TestTableName, TestIDField, t.id)
+	return databaseTestOperationHook(
+		client.NewOperationInfo(
+			TestTableName,
+			client.OperationTypeDelete,
+		),
+		t,
+		func() error {
+			return t.client.Delete(t.ctx, TestTableName, TestIDField, t.id)
+		},
+	)
 }
 
-func (t *TestList) List() (error, bool) {
-	return t.client.List(t.ctx, t.where, t, &t.result, t.order, t.paging)
+func (t *TestList) List() error {
+	return databaseTestListOperationHook(
+		client.NewOperationInfo(
+			TestTableName,
+			client.OperationTypeList,
+		),
+		t,
+		func() error {
+			return t.client.List(t.ctx, t.where, t, &t.result, t.order, t.paging)
+		},
+	)
 }
 
 func (t *TestList) Aggregate(f func(aggregate *client.Aggregate)) (func() error, error) {
